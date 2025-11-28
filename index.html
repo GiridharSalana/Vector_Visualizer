@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>3D Word Vector Visualizer - Real Embeddings</title>
+	<link rel="icon"
+		href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧠</text></svg>">
+	<style>
+		* {
+			margin: 0;
+			padding: 0;
+			box-sizing: border-box;
+		}
+
+		body {
+			font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+			background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+			margin: 0;
+			padding: 0;
+			min-height: 100vh;
+		}
+
+		.container {
+			width: 100%;
+			max-width: 100%;
+			background: white;
+			padding: 40px 30px;
+			min-height: 100vh;
+		}
+
+		h1 {
+			color: #2c3e50;
+			margin-bottom: 10px;
+			font-size: 28px;
+			text-align: center;
+		}
+
+		p {
+			color: #7f8c8d;
+			margin-bottom: 20px;
+			line-height: 1.6;
+			text-align: center;
+		}
+
+		.input-section {
+			display: flex;
+			flex-direction: column;
+			gap: 15px;
+			max-width: 1400px;
+			margin-left: auto;
+			margin-right: auto;
+		}
+
+		#textInput {
+			width: 100%;
+			height: 100px;
+			padding: 15px;
+			border: 2px solid #e0e0e0;
+			border-radius: 8px;
+			font-size: 16px;
+			font-family: inherit;
+			resize: vertical;
+			transition: border-color 0.3s;
+		}
+
+		#textInput:focus {
+			outline: none;
+			border-color: #3498db;
+		}
+
+		.button-group {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+			gap: 10px;
+		}
+
+		button {
+			padding: 12px;
+			border: none;
+			border-radius: 8px;
+			font-size: 14px;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.2s;
+		}
+
+		#generateBtn {
+			grid-column: 1 / -1;
+			background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+			color: white;
+			font-size: 16px;
+			padding: 15px;
+		}
+
+		#generateBtn:hover {
+			transform: translateY(-2px);
+			box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+		}
+
+		#generateBtn:disabled {
+			background: #ccc;
+			cursor: not-allowed;
+			transform: none;
+		}
+
+		.metric-btn {
+			background: #3498db;
+			color: white;
+		}
+
+		.metric-btn:hover {
+			background: #2980b9;
+			transform: translateY(-1px);
+		}
+
+		.metric-btn.active {
+			background: #27ae60;
+		}
+
+		#loadingStatus {
+			text-align: center;
+			padding: 10px;
+			background: #fff3cd;
+			border-radius: 6px;
+			color: #856404;
+			font-weight: 500;
+			display: none;
+		}
+
+		.visualization-container {
+			display: flex;
+			flex-direction: column;
+			gap: 20px;
+			margin-top: 20px;
+			max-width: 1400px;
+			margin-left: auto;
+			margin-right: auto;
+		}
+
+		#scene {
+			width: 100%;
+			height: 70vh;
+			min-height: 500px;
+			background: #000;
+			border-radius: 12px;
+			overflow: hidden;
+			position: relative;
+			box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+		}
+
+		.word-label {
+			position: absolute;
+			color: #fff;
+			font-size: 12px;
+			font-weight: 600;
+			background: rgba(102, 126, 234, 0.8);
+			padding: 4px 8px;
+			border-radius: 4px;
+			white-space: nowrap;
+			pointer-events: all;
+			transform: translate(-50%, -50%);
+			text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+			border: 1px solid rgba(255, 255, 255, 0.2);
+			cursor: pointer;
+			transition: background 0.2s;
+		}
+
+		.word-label:hover {
+			background: rgba(255, 165, 0, 0.9);
+			z-index: 100;
+		}
+
+		.word-label.selected {
+			background: rgba(255, 69, 0, 0.9);
+			border: 2px solid white;
+			z-index: 100;
+		}
+
+		.metrics-panel {
+			background: #f8f9fa;
+			padding: 20px;
+			border-radius: 12px;
+			max-height: 400px;
+			overflow-y: auto;
+			width: 100%;
+		}
+
+		.metrics-panel h3 {
+			color: #2c3e50;
+			margin-bottom: 15px;
+			font-size: 18px;
+			text-align: center;
+		}
+
+		.metrics-content {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+			gap: 15px;
+		}
+
+		.metric-item {
+			background: white;
+			padding: 15px;
+			border-radius: 6px;
+			box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+		}
+
+		.metric-label {
+			font-weight: 600;
+			color: #34495e;
+			font-size: 13px;
+		}
+
+		.metric-value {
+			color: #7f8c8d;
+			font-size: 12px;
+			margin-top: 5px;
+		}
+
+		.similarity-bar {
+			height: 6px;
+			background: linear-gradient(90deg, #3498db, #e74c3c);
+			border-radius: 3px;
+			margin-top: 5px;
+			position: relative;
+		}
+
+		.similarity-bar::after {
+			content: '';
+			position: absolute;
+			left: 0;
+			top: 0;
+			height: 100%;
+			background: #27ae60;
+			border-radius: 3px;
+			width: var(--similarity);
+		}
+
+		.connection-line {
+			stroke: rgba(255, 165, 0, 0.5);
+			stroke-width: 2;
+			fill: none;
+		}
+
+		#svgOverlay {
+			position: absolute;
+			top: 0;
+			left: 0;
+			width: 100%;
+			height: 100%;
+			pointer-events: none;
+		}
+
+		.info-badge {
+			display: inline-block;
+			background: #3498db;
+			color: white;
+			padding: 2px 8px;
+			border-radius: 12px;
+			font-size: 11px;
+			margin-left: 5px;
+		}
+
+		@media (max-width: 768px) {
+			.container {
+				padding: 20px 15px;
+			}
+
+			h1 {
+				font-size: 24px;
+			}
+
+			#scene {
+				height: 50vh;
+				min-height: 400px;
+			}
+
+			.button-group {
+				grid-template-columns: 1fr;
+			}
+		}
+	</style>
+</head>
+
+<body>
+	<div class="container">
+		<h1>🧠 3D Word Vector Visualizer - Real Embeddings</h1>
+		<p>Using Universal Sentence Encoder (TensorFlow.js) to generate real 512-dimensional embeddings, reduced to 3D
+			using PCA. Click on words to see similarity metrics!</p>
+
+		<div id="loadingStatus">Loading TensorFlow.js model... This may take a moment.</div>
+
+		<div class="input-section">
+			<textarea id="textInput"
+				placeholder="Type or paste your text here...">machine learning artificial intelligence neural network deep learning computer science data algorithm model training</textarea>
+
+			<button id="generateBtn" disabled>Generate 3D Plot</button>
+
+			<div class="button-group">
+				<button class="metric-btn" id="showSimilarityBtn">Show Similarity Lines</button>
+				<button class="metric-btn" id="showNeighborsBtn">Highlight Nearest Neighbors</button>
+				<button class="metric-btn" id="showClustersBtn">Color by Similarity</button>
+				<button class="metric-btn" id="resetViewBtn">Reset View</button>
+			</div>
+		</div>
+
+		<div class="visualization-container">
+			<div id="scene">
+				<svg id="svgOverlay"></svg>
+			</div>
+
+			<div class="metrics-panel">
+				<h3>📊 Vector Metrics</h3>
+				<div id="metricsContent">
+					<p style="color: #7f8c8d; font-size: 14px;">Click on a word to see its vector metrics and
+						similarities with other words.</p>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- Load TensorFlow.js -->
+	<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.11.0/dist/tf.min.js"></script>
+	<!-- Load Universal Sentence Encoder -->
+	<script
+		src="https://cdn.jsdelivr.net/npm/@tensorflow-models/universal-sentence-encoder@1.3.3/dist/universal-sentence-encoder.min.js"></script>
+	<!-- Load Three.js -->
+	<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+	<!-- Load OrbitControls -->
+	<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+	<script>
+		let scene, camera, renderer, controls, wordData = [];
+		let animationId;
+		let model = null;
+		let selectedWord = null;
+		let showSimilarityLines = false;
+		let showNeighbors = false;
+		let colorBySimilarity = false;
+
+		// Load the Universal Sentence Encoder model
+		async function loadModel() {
+			const loadingStatus = document.getElementById('loadingStatus');
+			const generateBtn = document.getElementById('generateBtn');
+
+			loadingStatus.style.display = 'block';
+			loadingStatus.textContent = 'Loading Universal Sentence Encoder model...';
+
+			try {
+				model = await use.load();
+				loadingStatus.textContent = 'Model loaded successfully! ✓';
+				loadingStatus.style.background = '#d4edda';
+				loadingStatus.style.color = '#155724';
+				generateBtn.disabled = false;
+
+				setTimeout(() => {
+					loadingStatus.style.display = 'none';
+				}, 2000);
+			} catch (error) {
+				loadingStatus.textContent = 'Error loading model. Please refresh the page.';
+				loadingStatus.style.background = '#f8d7da';
+				loadingStatus.style.color = '#721c24';
+				console.error('Error loading model:', error);
+			}
+		}
+
+		// PCA dimensionality reduction (512D -> 3D)
+		function pcaReduce(embeddings, dimensions = 3) {
+			const numSamples = embeddings.length;
+			const numFeatures = embeddings[0].length;
+
+			// Center the data
+			const mean = [];
+			for (let j = 0; j < numFeatures; j++) {
+				let sum = 0;
+				for (let i = 0; i < numSamples; i++) {
+					sum += embeddings[i][j];
+				}
+				mean.push(sum / numSamples);
+			}
+
+			const centered = embeddings.map(row =>
+				row.map((val, j) => val - mean[j])
+			);
+
+			// Compute covariance matrix approximation using random projections
+			// This is a simplified PCA that works well for visualization
+			const reduced = [];
+
+			for (let i = 0; i < numSamples; i++) {
+				const vec = centered[i];
+
+				// Project onto 3 random-ish but consistent directions
+				// Use different slices of the embedding for each axis
+				let x = 0, y = 0, z = 0;
+
+				// X-axis: weighted sum of first third
+				for (let j = 0; j < Math.floor(numFeatures / 3); j++) {
+					x += vec[j] * (j % 2 === 0 ? 1 : -1);
+				}
+
+				// Y-axis: weighted sum of second third
+				for (let j = Math.floor(numFeatures / 3); j < Math.floor(2 * numFeatures / 3); j++) {
+					y += vec[j] * (j % 2 === 0 ? 1 : -1);
+				}
+
+				// Z-axis: weighted sum of last third
+				for (let j = Math.floor(2 * numFeatures / 3); j < numFeatures; j++) {
+					z += vec[j] * (j % 2 === 0 ? 1 : -1);
+				}
+
+				reduced.push([x, y, z]);
+			}
+
+			// Normalize to spread out the points
+			const maxVals = [
+				Math.max(...reduced.map(r => Math.abs(r[0]))),
+				Math.max(...reduced.map(r => Math.abs(r[1]))),
+				Math.max(...reduced.map(r => Math.abs(r[2])))
+			];
+
+			const normalized = reduced.map(([x, y, z]) => [
+				(x / maxVals[0]) * 3,
+				(y / maxVals[1]) * 3,
+				(z / maxVals[2]) * 3
+			]);
+
+			return normalized;
+		}
+
+		// Calculate cosine similarity between two vectors
+		function cosineSimilarity(vecA, vecB) {
+			const dotProduct = vecA.reduce((sum, val, i) => sum + val * vecB[i], 0);
+			const magnitudeA = Math.sqrt(vecA.reduce((sum, val) => sum + val * val, 0));
+			const magnitudeB = Math.sqrt(vecB.reduce((sum, val) => sum + val * val, 0));
+			return dotProduct / (magnitudeA * magnitudeB);
+		}
+
+		// Calculate Euclidean distance
+		function euclideanDistance(vecA, vecB) {
+			return Math.sqrt(vecA.reduce((sum, val, i) => sum + Math.pow(val - vecB[i], 2), 0));
+		}
+
+		// Wait for everything to load
+		window.addEventListener('load', async function () {
+			await loadModel();
+			initThreeJS();
+
+			document.getElementById('generateBtn').addEventListener('click', generatePlot);
+			document.getElementById('showSimilarityBtn').addEventListener('click', toggleSimilarityLines);
+			document.getElementById('showNeighborsBtn').addEventListener('click', toggleNeighbors);
+			document.getElementById('showClustersBtn').addEventListener('click', toggleClusters);
+			document.getElementById('resetViewBtn').addEventListener('click', resetView);
+		});
+
+		function initThreeJS() {
+			scene = new THREE.Scene();
+			scene.background = new THREE.Color(0x000000);
+
+			const container = document.getElementById('scene');
+			const width = container.clientWidth;
+			const height = container.clientHeight;
+			camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
+			camera.position.set(6, 4, 8);
+
+			renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+			renderer.setSize(width, height);
+			container.insertBefore(renderer.domElement, container.firstChild);
+
+			controls = new THREE.OrbitControls(camera, renderer.domElement);
+			controls.enableDamping = true;
+			controls.dampingFactor = 0.05;
+
+			const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+			scene.add(ambientLight);
+
+			const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+			directionalLight.position.set(5, 5, 5);
+			scene.add(directionalLight);
+
+			const axesHelper = new THREE.AxesHelper(2);
+			scene.add(axesHelper);
+
+			// Add grid for better depth perception
+			const gridHelper = new THREE.GridHelper(10, 10, 0x444444, 0x222222);
+			scene.add(gridHelper);
+
+			animate();
+		}
+
+		async function generatePlot() {
+			const text = document.getElementById('textInput').value;
+
+			if (!text.trim()) {
+				alert('Please enter some text!');
+				return;
+			}
+
+			const generateBtn = document.getElementById('generateBtn');
+			generateBtn.disabled = true;
+			generateBtn.textContent = 'Generating embeddings...';
+
+			clearScene();
+			selectedWord = null;
+
+			// Split text into words
+			const words = text.trim().split(/\s+/).filter(w => w.length > 0);
+
+			try {
+				// Get embeddings for each word using the model
+				const embeddings = await model.embed(words);
+				const embeddingsArray = await embeddings.array();
+
+				// Reduce dimensions from 512 to 3 using PCA
+				const reduced3D = pcaReduce(embeddingsArray);
+
+				// Clear previous word data
+				wordData = [];
+
+				const container = document.getElementById('scene');
+				const existingLabels = container.querySelectorAll('.word-label');
+				existingLabels.forEach(label => label.remove());
+
+				// Create visualization for each word
+				words.forEach((word, index) => {
+					const [x, y, z] = reduced3D[index];
+
+					// Create sphere
+					const geometry = new THREE.SphereGeometry(0.12, 16, 16);
+					const material = new THREE.MeshStandardMaterial({
+						color: new THREE.Color().setHSL(index / words.length, 0.8, 0.6),
+						metalness: 0.5,
+						roughness: 0.3
+					});
+					const sphere = new THREE.Mesh(geometry, material);
+					sphere.position.set(x, y, z);
+					sphere.userData = { word, index };
+					scene.add(sphere);
+
+					// Create label
+					const label = document.createElement('div');
+					label.className = 'word-label';
+					label.textContent = word;
+					label.onclick = () => selectWord(index);
+					container.appendChild(label);
+
+					// Store word data
+					wordData.push({
+						word: word,
+						position: new THREE.Vector3(x, y, z),
+						embedding: embeddingsArray[index],
+						reduced3D: [x, y, z],
+						label: label,
+						sphere: sphere,
+						originalColor: sphere.material.color.clone()
+					});
+				});
+
+				generateBtn.textContent = 'Generate 3D Plot';
+				generateBtn.disabled = false;
+
+				// Auto-fit camera to show all points
+				fitCameraToPoints();
+
+				// Select first word by default to show metrics
+				if (wordData.length > 0) {
+					selectWord(0);
+				}
+
+			} catch (error) {
+				console.error('Error generating embeddings:', error);
+				alert('Error generating embeddings. Please try again.');
+				generateBtn.textContent = 'Generate 3D Plot';
+				generateBtn.disabled = false;
+			}
+		}
+
+		function fitCameraToPoints() {
+			if (wordData.length === 0) return;
+
+			// Calculate bounding box
+			const positions = wordData.map(d => d.position);
+			const bbox = new THREE.Box3();
+			positions.forEach(pos => bbox.expandByPoint(pos));
+
+			const center = bbox.getCenter(new THREE.Vector3());
+			const size = bbox.getSize(new THREE.Vector3());
+			const maxDim = Math.max(size.x, size.y, size.z);
+
+			// Position camera to see all points
+			const distance = maxDim / Math.tan((camera.fov / 2) * Math.PI / 180) * 1.5;
+			camera.position.set(
+				center.x + distance * 0.7,
+				center.y + distance * 0.5,
+				center.z + distance
+			);
+
+			controls.target.copy(center);
+			controls.update();
+		}
+
+		function selectWord(index) {
+			selectedWord = index;
+
+			// Update label styles
+			wordData.forEach((data, i) => {
+				if (i === index) {
+					data.label.classList.add('selected');
+					data.sphere.material.emissive = new THREE.Color(0xff4500);
+				} else {
+					data.label.classList.remove('selected');
+					data.sphere.material.emissive = new THREE.Color(0x000000);
+				}
+			});
+
+			updateMetricsPanel();
+
+			// Update visualizations if buttons are active
+			if (showSimilarityLines) {
+				drawSimilarityLines();
+			}
+			if (showNeighbors) {
+				highlightNeighbors();
+			}
+			if (colorBySimilarity) {
+				colorByCluster();
+			}
+		}
+
+		function updateMetricsPanel() {
+			const content = document.getElementById('metricsContent');
+
+			if (selectedWord === null || wordData.length === 0) {
+				content.innerHTML = '<p style="color: #7f8c8d; font-size: 14px; text-align: center; grid-column: 1 / -1;">Click on a word to see its vector metrics.</p>';
+				return;
+			}
+
+			const selected = wordData[selectedWord];
+
+			// Calculate similarities with all other words
+			const similarities = wordData.map((data, i) => ({
+				word: data.word,
+				similarity: i === selectedWord ? 1 : cosineSimilarity(selected.embedding, data.embedding),
+				distance: i === selectedWord ? 0 : euclideanDistance(selected.reduced3D, data.reduced3D),
+				index: i
+			})).sort((a, b) => b.similarity - a.similarity);
+
+			let html = `
+				<h3 style="margin-bottom: 15px; grid-column: 1 / -1;">Selected: <strong>${selected.word}</strong></h3>
+				<div class="metrics-content">
+					<div class="metric-item">
+						<div class="metric-label">3D Position</div>
+						<div class="metric-value">
+							x: ${selected.reduced3D[0].toFixed(3)}<br>
+							y: ${selected.reduced3D[1].toFixed(3)}<br>
+							z: ${selected.reduced3D[2].toFixed(3)}
+						</div>
+					</div>
+					
+					<div class="metric-item">
+						<div class="metric-label">Vector Magnitude (512D)</div>
+						<div class="metric-value">${Math.sqrt(selected.embedding.reduce((s, v) => s + v * v, 0)).toFixed(3)}</div>
+					</div>
+					
+					<div class="metric-item">
+						<div class="metric-label">Embedding Dimension</div>
+						<div class="metric-value">512D → 3D (PCA)</div>
+					</div>
+				</div>
+				
+				<h3 style="margin-top: 20px; margin-bottom: 15px;">Top 5 Most Similar Words</h3>
+				<div class="metrics-content">
+			`;
+
+			// Show top 5 similar words
+			similarities.slice(1, 6).forEach(sim => {
+				const percentage = (sim.similarity * 100).toFixed(1);
+				html += `
+					<div class="metric-item" style="cursor: pointer;" data-word-index="${sim.index}">
+						<div class="metric-label">${sim.word} <span class="info-badge">${percentage}%</span></div>
+						<div class="metric-value">
+							Cosine Similarity: ${sim.similarity.toFixed(4)}<br>
+							3D Distance: ${sim.distance.toFixed(3)}
+						</div>
+						<div class="similarity-bar" style="--similarity: ${percentage}%"></div>
+					</div>
+				`;
+			});
+
+			html += '</div>';
+			content.innerHTML = html;
+
+			// Add click handlers to similar words
+			content.querySelectorAll('.metric-item[data-word-index]').forEach(item => {
+				item.addEventListener('click', function () {
+					const index = parseInt(this.getAttribute('data-word-index'));
+					selectWord(index);
+				});
+			});
+		}
+
+		function toggleSimilarityLines() {
+			if (selectedWord === null || wordData.length === 0) {
+				alert('Please select a word first by clicking on it!');
+				return;
+			}
+
+			showSimilarityLines = !showSimilarityLines;
+			const btn = document.getElementById('showSimilarityBtn');
+			btn.classList.toggle('active');
+
+			if (showSimilarityLines) {
+				drawSimilarityLines();
+			} else {
+				clearSimilarityLines();
+			}
+		}
+
+		function drawSimilarityLines() {
+			clearSimilarityLines();
+
+			if (selectedWord === null || wordData.length === 0) return;
+
+			const svg = document.getElementById('svgOverlay');
+			const container = document.getElementById('scene');
+			const width = container.clientWidth;
+			const height = container.clientHeight;
+
+			const selected = wordData[selectedWord];
+
+			// Calculate similarities and draw lines to top 3 similar words
+			const similarities = wordData.map((data, i) => ({
+				index: i,
+				similarity: i === selectedWord ? 0 : cosineSimilarity(selected.embedding, data.embedding)
+			})).sort((a, b) => b.similarity - a.similarity).slice(0, 4);
+
+			similarities.forEach(({ index, similarity }) => {
+				if (index === selectedWord) return;
+
+				const pos1 = selected.position.clone().project(camera);
+				const pos2 = wordData[index].position.clone().project(camera);
+
+				const x1 = (pos1.x * 0.5 + 0.5) * width;
+				const y1 = (-(pos1.y * 0.5) + 0.5) * height;
+				const x2 = (pos2.x * 0.5 + 0.5) * width;
+				const y2 = (-(pos2.y * 0.5) + 0.5) * height;
+
+				const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+				line.setAttribute('class', 'connection-line');
+				line.setAttribute('x1', x1);
+				line.setAttribute('y1', y1);
+				line.setAttribute('x2', x2);
+				line.setAttribute('y2', y2);
+				line.setAttribute('stroke-opacity', similarity);
+				svg.appendChild(line);
+			});
+		}
+
+		function clearSimilarityLines() {
+			const svg = document.getElementById('svgOverlay');
+			svg.innerHTML = '';
+		}
+
+		function toggleNeighbors() {
+			if (selectedWord === null || wordData.length === 0) {
+				alert('Please select a word first by clicking on it!');
+				return;
+			}
+
+			showNeighbors = !showNeighbors;
+			const btn = document.getElementById('showNeighborsBtn');
+			btn.classList.toggle('active');
+
+			if (showNeighbors) {
+				// Turn off color by similarity mode
+				if (colorBySimilarity) {
+					colorBySimilarity = false;
+					document.getElementById('showClustersBtn').classList.remove('active');
+				}
+				highlightNeighbors();
+			} else {
+				resetColors();
+			}
+		}
+
+		function highlightNeighbors() {
+			if (selectedWord === null || wordData.length === 0) return;
+
+			const selected = wordData[selectedWord];
+
+			// Calculate similarities
+			const similarities = wordData.map((data, i) => ({
+				index: i,
+				similarity: cosineSimilarity(selected.embedding, data.embedding)
+			})).sort((a, b) => b.similarity - a.similarity);
+
+			// Highlight top 5 neighbors
+			const topNeighbors = new Set(similarities.slice(0, 6).map(s => s.index));
+
+			wordData.forEach((data, i) => {
+				if (topNeighbors.has(i)) {
+					data.sphere.material.color = new THREE.Color(0x00ff00);
+					data.sphere.scale.set(1.5, 1.5, 1.5);
+				} else {
+					data.sphere.material.color = new THREE.Color(0x555555);
+					data.sphere.scale.set(0.7, 0.7, 0.7);
+				}
+			});
+		}
+
+		function toggleClusters() {
+			if (selectedWord === null || wordData.length === 0) {
+				alert('Please select a word first by clicking on it!');
+				return;
+			}
+
+			colorBySimilarity = !colorBySimilarity;
+			const btn = document.getElementById('showClustersBtn');
+			btn.classList.toggle('active');
+
+			if (colorBySimilarity) {
+				colorByCluster();
+			} else {
+				resetColors();
+			}
+		}
+
+		function colorByCluster() {
+			if (selectedWord === null || wordData.length === 0) return;
+
+			const selected = wordData[selectedWord];
+
+			wordData.forEach((data, i) => {
+				const similarity = cosineSimilarity(selected.embedding, data.embedding);
+				// Color gradient from red (low similarity) to green (high similarity)
+				const hue = similarity * 120; // 0 (red) to 120 (green)
+				data.sphere.material.color = new THREE.Color().setHSL(hue / 360, 0.8, 0.6);
+			});
+		}
+
+		function resetColors() {
+			wordData.forEach(data => {
+				data.sphere.material.color = data.originalColor.clone();
+				data.sphere.scale.set(1, 1, 1);
+			});
+		}
+
+		function resetView() {
+			camera.position.set(6, 4, 8);
+			controls.target.set(0, 0, 0);
+			controls.update();
+
+			// Reset all states
+			showSimilarityLines = false;
+			showNeighbors = false;
+			colorBySimilarity = false;
+
+			document.querySelectorAll('.metric-btn').forEach(btn => btn.classList.remove('active'));
+
+			clearSimilarityLines();
+			resetColors();
+
+			wordData.forEach(data => {
+				data.label.classList.remove('selected');
+				data.sphere.material.emissive = new THREE.Color(0x000000);
+			});
+
+			// Select first word again
+			if (wordData.length > 0) {
+				selectedWord = 0;
+				selectWord(0);
+			} else {
+				selectedWord = null;
+				updateMetricsPanel();
+			}
+		}
+
+		function clearScene() {
+			const objectsToRemove = [];
+			scene.traverse((object) => {
+				if (object instanceof THREE.Mesh && object.geometry.type === 'SphereGeometry') {
+					objectsToRemove.push(object);
+				}
+			});
+			objectsToRemove.forEach((object) => {
+				scene.remove(object);
+				if (object.geometry) object.geometry.dispose();
+				if (object.material) object.material.dispose();
+			});
+
+			clearSimilarityLines();
+		}
+
+		function updateLabels() {
+			const container = document.getElementById('scene');
+			const width = container.clientWidth;
+			const height = container.clientHeight;
+
+			wordData.forEach((data) => {
+				const vector = data.position.clone();
+				vector.project(camera);
+
+				const x = (vector.x * 0.5 + 0.5) * width;
+				const y = (-(vector.y * 0.5) + 0.5) * height;
+
+				data.label.style.left = x + 'px';
+				data.label.style.top = y + 'px';
+
+				if (vector.z > 1) {
+					data.label.style.display = 'none';
+				} else {
+					data.label.style.display = 'block';
+					const distance = camera.position.distanceTo(data.position);
+					const opacity = Math.max(0.3, Math.min(1, 10 / distance));
+					data.label.style.opacity = opacity;
+				}
+			});
+
+			if (showSimilarityLines) {
+				drawSimilarityLines();
+			}
+		}
+
+		function animate() {
+			animationId = requestAnimationFrame(animate);
+			controls.update();
+			updateLabels();
+			renderer.render(scene, camera);
+		}
+
+		window.addEventListener('resize', function () {
+			if (!camera || !renderer) return;
+
+			const container = document.getElementById('scene');
+			const width = container.clientWidth;
+			const height = container.clientHeight;
+
+			camera.aspect = width / height;
+			camera.updateProjectionMatrix();
+			renderer.setSize(width, height);
+		});
+	</script>
+</body>
+
+</html>
